@@ -5,13 +5,16 @@ import (
 	"fmt"
 	"github.com/vllvll/diploma/internal/middlewares"
 	"github.com/vllvll/diploma/internal/repositories"
+	"github.com/vllvll/diploma/internal/services"
+	"github.com/vllvll/diploma/internal/types"
 	"net/http"
-	"strconv"
 	"time"
 )
 
 type Handler struct {
-	userRepository repositories.UserInterface
+	userRepository  repositories.UserInterface
+	tokenRepository repositories.TokenInterface
+	cryptService    services.CryptInterface
 }
 
 type UserHandlers interface {
@@ -24,79 +27,100 @@ type UserHandlers interface {
 	GetWithdrawals() http.HandlerFunc
 }
 
-func NewHandler(userRepository repositories.UserInterface) *Handler {
+func NewHandler(userRepository repositories.UserInterface, tokenRepository repositories.TokenInterface, cryptService services.CryptInterface) *Handler {
 	return &Handler{
-		userRepository: userRepository,
+		userRepository:  userRepository,
+		tokenRepository: tokenRepository,
+		cryptService:    cryptService,
 	}
 }
 
-//func (h Handler) Ping() http.HandlerFunc {
-//	return func(rw http.ResponseWriter, r *http.Request) {
-//		err := h.db.Ping()
-//		if err != nil {
-//			http.Error(rw, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-//
-//			return
-//		}
-//
-//		rw.WriteHeader(http.StatusOK)
-//		rw.Write([]byte(http.StatusText(http.StatusOK)))
+//func (h Handler) isAuth(r *http.Request) bool {
+//	c, err := r.Cookie("gophermart-auth-cookie")
+//	if err != nil || c.Value == "" || !h.tokenRepository.IsExists(c.Value) {
+//		return false
 //	}
+//
+//	return true
 //}
 
 func (h Handler) Register() http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
-		type User struct {
-			Login    string `json:"login"`
-			Password string `json:"password"`
-		}
-
-		var userItem User
+		var userItem types.UserRequest
 
 		if err := json.NewDecoder(r.Body).Decode(&userItem); err != nil {
 			http.Error(rw, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 			return
 		}
 
-		isExists, err := h.userRepository.IsExists(userItem.Login)
-		if err != nil {
-			http.Error(rw, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-			return
-		}
-
-		if isExists {
+		if h.userRepository.IsExists(userItem.Login) {
 			http.Error(rw, http.StatusText(http.StatusConflict), http.StatusConflict)
 			return
 		}
 
-		id, err := h.userRepository.CreateUser(userItem.Login, userItem.Password)
+		password := h.cryptService.Hash(userItem.Password)
+
+		userId, err := h.userRepository.CreateUser(userItem.Login, password)
 		if err != nil {
 			http.Error(rw, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
 
-		//r.AddCookie(&http.Cookie{
-		//	Name:    "gophermart-auth-cookie",
-		//	Value:   "token",
-		//	Expires: time.Now().Add(365 * 24 * time.Hour),
-		//})
+		token, err := h.cryptService.GenerateRand()
+		if err != nil {
+			http.Error(rw, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
+
+		err = h.tokenRepository.CreateToken(token, userId)
+		if err != nil {
+			http.Error(rw, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
 
 		http.SetCookie(rw, &http.Cookie{
 			Name:    "gophermart-auth-cookie",
-			Value:   "token",
+			Value:   token,
 			Expires: time.Now().Add(365 * 24 * time.Hour),
 		})
 
 		rw.WriteHeader(http.StatusOK)
-		rw.Write([]byte(strconv.Itoa(id)))
+		rw.Write([]byte(http.StatusText(http.StatusOK)))
 	}
 }
 
 func (h Handler) Login() http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
-		cookie := r.Cookies()
+		var userItem types.UserRequest
 
-		fmt.Println(cookie)
+		if err := json.NewDecoder(r.Body).Decode(&userItem); err != nil {
+			http.Error(rw, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+			return
+		}
+
+		user, err := h.userRepository.GetUserHashByLogin(userItem.Login)
+		if err != nil || !h.cryptService.IsEqual(userItem.Password, user.Hash) {
+			http.Error(rw, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			return
+		}
+
+		token, err := h.cryptService.GenerateRand()
+		if err != nil {
+			http.Error(rw, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
+
+		err = h.tokenRepository.CreateToken(token, user.Id)
+		if err != nil {
+			http.Error(rw, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
+
+		http.SetCookie(rw, &http.Cookie{
+			Name:    "gophermart-auth-cookie",
+			Value:   token,
+			Expires: time.Now().Add(365 * 24 * time.Hour),
+		})
 
 		rw.WriteHeader(http.StatusOK)
 		rw.Write([]byte(http.StatusText(http.StatusOK)))
@@ -105,11 +129,13 @@ func (h Handler) Login() http.HandlerFunc {
 
 func (h Handler) GetOrders() http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
-		if user := middlewares.ForContext(r.Context()); user == nil {
-			http.Error(rw, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		user := middlewares.ForContext(r.Context())
+		fmt.Println(user)
 
-			return
-		}
+		//if !h.isAuth(r) {
+		//	http.Error(rw, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		//	return
+		//}
 
 		rw.WriteHeader(http.StatusOK)
 		rw.Write([]byte(http.StatusText(http.StatusOK)))
@@ -118,6 +144,8 @@ func (h Handler) GetOrders() http.HandlerFunc {
 
 func (h Handler) AddOrder() http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
+		//_ := middlewares.ForContext(r.Context())
+
 		rw.WriteHeader(http.StatusOK)
 		rw.Write([]byte(http.StatusText(http.StatusOK)))
 	}

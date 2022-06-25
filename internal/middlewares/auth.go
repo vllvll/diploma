@@ -2,6 +2,8 @@ package middlewares
 
 import (
 	"context"
+	"github.com/vllvll/diploma/internal/repositories"
+	"github.com/vllvll/diploma/internal/types"
 	"net/http"
 )
 
@@ -11,34 +13,38 @@ type contextKey struct {
 	name string
 }
 
-type User struct {
-	Name    string
-	IsAdmin bool
+func Auth(userRepository repositories.UserInterface, tokenRepository repositories.TokenInterface) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+			c, err := r.Cookie("gophermart-auth-cookie")
+			// Allow unauthenticated users in
+			if err != nil || c == nil {
+				next.ServeHTTP(rw, r)
+				return
+			}
+
+			userId, err := tokenRepository.GetUserIdByToken(c.Value)
+			if err != nil {
+				http.Error(rw, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+				return
+			}
+
+			user, err := userRepository.GetUserById(userId)
+			if err != nil {
+				http.Error(rw, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+				return
+			}
+
+			ctx := context.WithValue(r.Context(), userCtxKey, user)
+
+			r = r.WithContext(ctx)
+			next.ServeHTTP(rw, r)
+		})
+	}
 }
 
-func Auth(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		//c, err := r.Cookie("gophermart-auth-cookie")
-		//if err != nil || c == nil {
-		//	next.ServeHTTP(w, r)
-		//}
-		//
-		//userId, err := validateAndGetUserID(c)
-		//if err != nil {
-		//	http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
-		//}
-		//
-		//user := getUserById(db, userId)
-		//ctx := context.WithValue(r.Context(), userCtxKey, user)
-		//
-		//r = r.WithContext(ctx)
-
-		next.ServeHTTP(w, r)
-	})
-}
-
-func ForContext(ctx context.Context) *User {
-	raw, _ := ctx.Value(userCtxKey).(*User)
+func ForContext(ctx context.Context) types.User {
+	raw, _ := ctx.Value(userCtxKey).(types.User)
 
 	return raw
 }

@@ -6,6 +6,7 @@ import (
 	"github.com/vllvll/diploma/internal/handlers"
 	"github.com/vllvll/diploma/internal/repositories"
 	"github.com/vllvll/diploma/internal/routes"
+	"github.com/vllvll/diploma/internal/services"
 	"github.com/vllvll/diploma/pkg/postgres"
 	"log"
 	"net/http"
@@ -16,7 +17,7 @@ import (
 )
 
 func main() {
-	config, err := conf.CreateServerConfig()
+	config, err := conf.CreateGophermartConfig()
 	if err != nil {
 		log.Fatalf("Error with config: %v", err)
 	}
@@ -28,9 +29,12 @@ func main() {
 	defer db.Close()
 
 	userRepository := repositories.NewUserRepository(db)
+	tokenRepository := repositories.NewTokenRepository(db)
 
-	handler := handlers.NewHandler(userRepository)
-	router := routes.NewRouter(*handler)
+	cryptService := services.NewCrypt(config.Key)
+
+	handler := handlers.NewHandler(userRepository, tokenRepository, cryptService)
+	router := routes.NewRouter(*handler, userRepository, tokenRepository)
 	//router = routes.NewRouter(*handler)
 	router.RegisterHandlers()
 
