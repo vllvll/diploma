@@ -33,14 +33,12 @@ func (ro *Router) RegisterHandlers() {
 	ro.Router.Route("/api/user/", func(r chi.Router) {
 		r.Post("/register", ro.handlers.Register())
 		r.Post("/login", ro.handlers.Login())
-		r.Get("/balance", ro.handlers.GetBalance())
 
 		r.Post("/orders", ro.handlers.AddOrder())
 		r.Get("/orders", ro.handlers.GetOrders())
 
-		ro.Router.Route("/balance/", func(r chi.Router) {
-			r.Post("/withdraw", ro.handlers.AddWithdraw())
-			r.Get("/withdrawals", ro.handlers.GetWithdrawals())
-		})
+		r.Get("/balance", ro.handlers.GetBalance())
+		r.Post("/balance/withdraw", ro.handlers.AddWithdraw())
+		r.Get("/balance/withdrawals", ro.handlers.GetWithdrawals())
 	})
 }

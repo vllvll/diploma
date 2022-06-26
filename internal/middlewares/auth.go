@@ -17,21 +17,20 @@ func Auth(userRepository repositories.UserInterface, tokenRepository repositorie
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 			c, err := r.Cookie("gophermart-auth-cookie")
-			// Allow unauthenticated users in
 			if err != nil || c == nil {
 				next.ServeHTTP(rw, r)
 				return
 			}
 
-			userId, err := tokenRepository.GetUserIdByToken(c.Value)
+			userID, err := tokenRepository.GetUserIdByToken(c.Value)
 			if err != nil {
-				http.Error(rw, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+				next.ServeHTTP(rw, r)
 				return
 			}
 
-			user, err := userRepository.GetUserById(userId)
+			user, err := userRepository.GetUserById(userID)
 			if err != nil {
-				http.Error(rw, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+				next.ServeHTTP(rw, r)
 				return
 			}
 
@@ -43,8 +42,13 @@ func Auth(userRepository repositories.UserInterface, tokenRepository repositorie
 	}
 }
 
-func ForContext(ctx context.Context) types.User {
-	raw, _ := ctx.Value(userCtxKey).(types.User)
+func ForContext(ctx context.Context) *types.User {
+	value := ctx.Value(userCtxKey)
+	if value == nil {
+		return nil
+	}
 
-	return raw
+	raw, _ := value.(types.User)
+
+	return &raw
 }

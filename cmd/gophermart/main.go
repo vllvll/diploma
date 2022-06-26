@@ -22,7 +22,7 @@ func main() {
 		log.Fatalf("Error with config: %v", err)
 	}
 
-	db, err := postgres.ConnectDatabase(config.DatabaseUri)
+	db, err := postgres.ConnectDatabase(config.DatabaseURI)
 	if err != nil {
 		log.Fatalf("Error with database: %v", err)
 	}
@@ -30,10 +30,13 @@ func main() {
 
 	userRepository := repositories.NewUserRepository(db)
 	tokenRepository := repositories.NewTokenRepository(db)
+	orderRepository := repositories.NewOrderRepository(db)
+	balanceRepository := repositories.NewBalanceRepository(db)
 
 	cryptService := services.NewCrypt(config.Key)
+	luhnService := services.NewLuhn()
 
-	handler := handlers.NewHandler(userRepository, tokenRepository, cryptService)
+	handler := handlers.NewHandler(userRepository, tokenRepository, orderRepository, balanceRepository, cryptService, luhnService)
 	router := routes.NewRouter(*handler, userRepository, tokenRepository)
 	//router = routes.NewRouter(*handler)
 	router.RegisterHandlers()
@@ -52,20 +55,17 @@ func main() {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
 
-	for {
-		select {
-		case <-c:
-			log.Println("Graceful shutdown")
+	for range c {
+		log.Println("Graceful shutdown")
 
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 
-			if err := httpServer.Shutdown(ctx); err != nil {
-				log.Println(err)
-			}
-
-			cancel()
-
-			return
+		if err := httpServer.Shutdown(ctx); err != nil {
+			log.Println(err)
 		}
+
+		cancel()
+
+		return
 	}
 }

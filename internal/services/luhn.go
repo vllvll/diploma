@@ -1,25 +1,22 @@
 package services
 
 type Luhn struct {
-	key []byte
 }
 
 type LuhnInterface interface {
-	IsValid(number int) bool
+	IsValid(number int64) bool
 }
 
-func NewLuhn(key string) CryptInterface {
-	return Crypt{
-		key: []byte(key),
-	}
+func NewLuhn() LuhnInterface {
+	return Luhn{}
 }
 
-func (l Luhn) IsValid(number int) bool {
+func (l Luhn) IsValid(number int64) bool {
 	return (number%10+l.checksum(number/10))%10 == 0
 }
 
-func (l Luhn) checksum(number int) int {
-	var luhn int
+func (l Luhn) checksum(number int64) int64 {
+	var luhn int64
 
 	for i := 0; number > 0; i++ {
 		cur := number % 10
