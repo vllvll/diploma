@@ -61,12 +61,12 @@ func ConnectDatabase(uri string) (*sql.DB, error) {
 			id         serial
 				constraint balances_pk
 					primary key,
-			user_id    integer           not null
+			user_id    integer                    not null
 				constraint balances_users_id_fk
 					references users,
-			sum        integer default 0 not null,
-			created_at timestamp         not null,
-			updated_at timestamp         not null
+			sum        double precision default 0 not null,
+			created_at timestamp                  not null,
+			updated_at timestamp                  not null
 		);
 		
 		alter table balances
@@ -101,10 +101,10 @@ func ConnectDatabase(uri string) (*sql.DB, error) {
 			id         serial
 				constraint withdraw_pk
 					primary key,
-			user_id    integer   not null,
-			number     bigint    not null,
-			sum        integer   not null,
-			created_at timestamp not null
+			user_id    integer          not null,
+			number     bigint           not null,
+			sum        double precision not null,
+			created_at timestamp        not null
 		);
 		
 		alter table withdraw

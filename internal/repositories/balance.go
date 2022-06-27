@@ -14,7 +14,7 @@ type Balance struct {
 type BalanceInterface interface {
 	CreateBalance(userId int) error
 	GetByUserId(userId int) (balance types.Balance, err error)
-	UpdateBalance(userId int, number int64, sum int) (bool, error)
+	UpdateBalance(userId int, number int64, sum float64) (bool, error)
 	GetWithdrawals(userId int) ([]types.Withdraw, error)
 }
 
@@ -49,7 +49,7 @@ func (b *Balance) GetByUserId(userId int) (balance types.Balance, err error) {
 	return balance, nil
 }
 
-func (b *Balance) UpdateBalance(userId int, number int64, sum int) (bool, error) {
+func (b *Balance) UpdateBalance(userId int, number int64, sum float64) (bool, error) {
 	tx, err := b.db.Begin()
 	if err != nil {
 		log.Printf("Error with open transaction: %v\n", err)
