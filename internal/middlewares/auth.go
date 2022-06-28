@@ -22,13 +22,13 @@ func Auth(userRepository repositories.UserInterface, tokenRepository repositorie
 				return
 			}
 
-			userID, err := tokenRepository.GetUserIdByToken(c.Value)
+			userID, err := tokenRepository.GetUserIDByToken(c.Value)
 			if err != nil {
 				next.ServeHTTP(rw, r)
 				return
 			}
 
-			user, err := userRepository.GetUserById(userID)
+			user, err := userRepository.GetUserByID(userID)
 			if err != nil {
 				next.ServeHTTP(rw, r)
 				return

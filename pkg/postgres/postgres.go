@@ -38,13 +38,13 @@ func ConnectDatabase(uri string) (*sql.DB, error) {
 			id          serial
 				constraint orders_pk
 					primary key,
-			number      bigint            not null,
-			user_id     integer           not null
+			number      text                       not null,
+			user_id     integer                    not null
 				constraint orders_users_id_fk
 					references users,
-			status      text              not null,
-			uploaded_at timestamp         not null,
-			accrual     integer default 0 not null
+			status      text                       not null,
+			uploaded_at timestamp                  not null,
+			accrual     double precision default 0 not null
 		);
 		
 		alter table orders
@@ -102,7 +102,7 @@ func ConnectDatabase(uri string) (*sql.DB, error) {
 				constraint withdraw_pk
 					primary key,
 			user_id    integer          not null,
-			number     bigint           not null,
+			number     text             not null,
 			sum        double precision not null,
 			created_at timestamp        not null
 		);

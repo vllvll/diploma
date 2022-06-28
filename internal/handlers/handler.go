@@ -19,6 +19,7 @@ type Handler struct {
 	balanceRepository repositories.BalanceInterface
 	cryptService      services.CryptInterface
 	luhnService       services.LuhnInterface
+	orderCh           chan<- string
 }
 
 type UserHandlers interface {
@@ -38,6 +39,7 @@ func NewHandler(
 	balanceRepository repositories.BalanceInterface,
 	cryptService services.CryptInterface,
 	luhnService services.LuhnInterface,
+	ch chan<- string,
 ) *Handler {
 	return &Handler{
 		userRepository:    userRepository,
@@ -46,6 +48,7 @@ func NewHandler(
 		balanceRepository: balanceRepository,
 		cryptService:      cryptService,
 		luhnService:       luhnService,
+		orderCh:           ch,
 	}
 }
 
@@ -65,13 +68,13 @@ func (h Handler) Register() http.HandlerFunc {
 
 		password := h.cryptService.Hash(userItem.Password)
 
-		userId, err := h.userRepository.CreateUser(userItem.Login, password)
+		userID, err := h.userRepository.CreateUser(userItem.Login, password)
 		if err != nil {
 			http.Error(rw, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
 
-		err = h.balanceRepository.CreateBalance(userId)
+		err = h.balanceRepository.CreateBalance(userID)
 		if err != nil {
 			http.Error(rw, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
@@ -83,7 +86,7 @@ func (h Handler) Register() http.HandlerFunc {
 			return
 		}
 
-		err = h.tokenRepository.CreateToken(token, userId)
+		err = h.tokenRepository.CreateToken(token, userID)
 		if err != nil {
 			http.Error(rw, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
@@ -121,7 +124,7 @@ func (h Handler) Login() http.HandlerFunc {
 			return
 		}
 
-		err = h.tokenRepository.CreateToken(token, user.Id)
+		err = h.tokenRepository.CreateToken(token, user.ID)
 		if err != nil {
 			http.Error(rw, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
@@ -146,7 +149,7 @@ func (h Handler) GetOrders() http.HandlerFunc {
 			return
 		}
 
-		orders, err := h.orderRepository.GetOrdersByUser(user.Id)
+		orders, err := h.orderRepository.GetOrdersByUser(user.ID)
 		if err != nil {
 			http.Error(rw, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
@@ -184,31 +187,34 @@ func (h Handler) AddOrder() http.HandlerFunc {
 			return
 		}
 
-		orderNumber, err := strconv.ParseInt(string(body), 10, 64)
+		orderNumber := string(body)
+		orderNumberForCheck, err := strconv.ParseInt(orderNumber, 10, 64)
 		if err != nil {
 			http.Error(rw, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 			return
 		}
 
-		if !h.luhnService.IsValid(orderNumber) {
+		if !h.luhnService.IsValid(orderNumberForCheck) {
 			http.Error(rw, http.StatusText(http.StatusUnprocessableEntity), http.StatusUnprocessableEntity)
 			return
 		}
 
 		order, err := h.orderRepository.GetByNumber(orderNumber)
 		if err != nil {
-			err := h.orderRepository.CreateOrder(orderNumber, user.Id)
+			err := h.orderRepository.CreateOrder(orderNumber, user.ID)
 			if err != nil {
 				http.Error(rw, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 				return
 			}
+
+			h.orderCh <- orderNumber
 
 			rw.WriteHeader(http.StatusAccepted)
 			rw.Write([]byte(http.StatusText(http.StatusAccepted)))
 			return
 		}
 
-		if order.UserId != user.Id {
+		if order.UserID != user.ID {
 			http.Error(rw, http.StatusText(http.StatusConflict), http.StatusConflict)
 			return
 		}
@@ -226,14 +232,10 @@ func (h Handler) GetBalance() http.HandlerFunc {
 			return
 		}
 
-		balance, err := h.balanceRepository.GetByUserId(user.Id)
-		if err != nil {
-			http.Error(rw, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-			return
-		}
-
+		balance, _ := h.balanceRepository.GetSumAndWithdrawals(user.ID)
 		response, err := json.Marshal(balance)
 		if err != nil {
+
 			http.Error(rw, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
@@ -258,18 +260,18 @@ func (h Handler) AddWithdraw() http.HandlerFunc {
 			return
 		}
 
-		orderNumber, err := strconv.ParseInt(withdraw.Order, 10, 64)
+		orderNumberForCheck, err := strconv.ParseInt(withdraw.Order, 10, 64)
 		if err != nil {
 			http.Error(rw, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 			return
 		}
 
-		if !h.luhnService.IsValid(orderNumber) {
+		if !h.luhnService.IsValid(orderNumberForCheck) {
 			http.Error(rw, http.StatusText(http.StatusUnprocessableEntity), http.StatusUnprocessableEntity)
 			return
 		}
 
-		isUpdate, err := h.balanceRepository.UpdateBalance(user.Id, orderNumber, withdraw.Sum)
+		isUpdate, err := h.balanceRepository.AddWithdraw(user.ID, withdraw.Order, withdraw.Sum)
 		if err != nil {
 			http.Error(rw, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
@@ -293,7 +295,7 @@ func (h Handler) GetWithdrawals() http.HandlerFunc {
 			return
 		}
 
-		withdrawals, err := h.balanceRepository.GetWithdrawals(user.Id)
+		withdrawals, err := h.balanceRepository.GetWithdrawals(user.ID)
 		if err != nil {
 			http.Error(rw, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return

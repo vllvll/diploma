@@ -4,6 +4,7 @@ import (
 	"context"
 	conf "github.com/vllvll/diploma/internal/config"
 	"github.com/vllvll/diploma/internal/handlers"
+	"github.com/vllvll/diploma/internal/integrations"
 	"github.com/vllvll/diploma/internal/repositories"
 	"github.com/vllvll/diploma/internal/routes"
 	"github.com/vllvll/diploma/internal/services"
@@ -36,9 +37,13 @@ func main() {
 	cryptService := services.NewCrypt(config.Key)
 	luhnService := services.NewLuhn()
 
-	handler := handlers.NewHandler(userRepository, tokenRepository, orderRepository, balanceRepository, cryptService, luhnService)
+	loyaltyCh := make(chan string)
+	loyaltyClient := integrations.NewLoyaltyClient(config, loyaltyCh, orderRepository, balanceRepository)
+
+	go loyaltyClient.Processing()
+
+	handler := handlers.NewHandler(userRepository, tokenRepository, orderRepository, balanceRepository, cryptService, luhnService, loyaltyCh)
 	router := routes.NewRouter(*handler, userRepository, tokenRepository)
-	//router = routes.NewRouter(*handler)
 	router.RegisterHandlers()
 
 	httpServer := &http.Server{
@@ -66,6 +71,6 @@ func main() {
 
 		cancel()
 
-		return
+		break
 	}
 }

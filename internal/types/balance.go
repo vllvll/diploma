@@ -3,9 +3,14 @@ package types
 import "time"
 
 type Balance struct {
-	Id        int       `json:"-"`
-	UserId    int       `json:"-"`
-	Sum       float64   `json:"current"`
-	CreatedAt time.Time `json:"-"`
-	UpdatedAt time.Time `json:"-"`
+	ID        int
+	UserID    int
+	Sum       float32
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+type ResponseBalance struct {
+	Current   float32 `json:"current"`
+	Withdrawn float32 `json:"withdrawn"`
 }

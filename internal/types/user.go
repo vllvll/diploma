@@ -6,7 +6,7 @@ type UserRequest struct {
 }
 
 type User struct {
-	Id    int
+	ID    int
 	Login string
 	Hash  string
 }
