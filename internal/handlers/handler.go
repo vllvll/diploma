@@ -20,6 +20,7 @@ type Handler struct {
 	cryptService      services.CryptInterface
 	luhnService       services.LuhnInterface
 	orderCh           chan<- string
+	errCh             chan<- error
 }
 
 type UserHandlers interface {
@@ -40,6 +41,7 @@ func NewHandler(
 	cryptService services.CryptInterface,
 	luhnService services.LuhnInterface,
 	ch chan<- string,
+	errCh chan<- error,
 ) *Handler {
 	return &Handler{
 		userRepository:    userRepository,
@@ -49,6 +51,7 @@ func NewHandler(
 		cryptService:      cryptService,
 		luhnService:       luhnService,
 		orderCh:           ch,
+		errCh:             errCh,
 	}
 }
 
@@ -70,24 +73,28 @@ func (h Handler) Register() http.HandlerFunc {
 
 		userID, err := h.userRepository.CreateUser(userItem.Login, password)
 		if err != nil {
+			h.errCh <- err
 			http.Error(rw, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
 
 		err = h.balanceRepository.CreateBalance(userID)
 		if err != nil {
+			h.errCh <- err
 			http.Error(rw, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
 
 		token, err := h.cryptService.GenerateRand()
 		if err != nil {
+			h.errCh <- err
 			http.Error(rw, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
 
 		err = h.tokenRepository.CreateToken(token, userID)
 		if err != nil {
+			h.errCh <- err
 			http.Error(rw, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
@@ -114,18 +121,21 @@ func (h Handler) Login() http.HandlerFunc {
 
 		user, err := h.userRepository.GetUserHashByLogin(userItem.Login)
 		if err != nil || !h.cryptService.IsEqual(userItem.Password, user.Hash) {
+			h.errCh <- err
 			http.Error(rw, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 			return
 		}
 
 		token, err := h.cryptService.GenerateRand()
 		if err != nil {
+			h.errCh <- err
 			http.Error(rw, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
 
 		err = h.tokenRepository.CreateToken(token, user.ID)
 		if err != nil {
+			h.errCh <- err
 			http.Error(rw, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
@@ -151,6 +161,7 @@ func (h Handler) GetOrders() http.HandlerFunc {
 
 		orders, err := h.orderRepository.GetOrdersByUser(user.ID)
 		if err != nil {
+			h.errCh <- err
 			http.Error(rw, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
@@ -163,6 +174,7 @@ func (h Handler) GetOrders() http.HandlerFunc {
 
 		response, err := json.Marshal(orders)
 		if err != nil {
+			h.errCh <- err
 			http.Error(rw, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
@@ -203,6 +215,7 @@ func (h Handler) AddOrder() http.HandlerFunc {
 		if err != nil {
 			err := h.orderRepository.CreateOrder(orderNumber, user.ID)
 			if err != nil {
+				h.errCh <- err
 				http.Error(rw, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 				return
 			}
@@ -235,7 +248,7 @@ func (h Handler) GetBalance() http.HandlerFunc {
 		balance, _ := h.balanceRepository.GetSumAndWithdrawals(user.ID)
 		response, err := json.Marshal(balance)
 		if err != nil {
-
+			h.errCh <- err
 			http.Error(rw, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
@@ -273,6 +286,7 @@ func (h Handler) AddWithdraw() http.HandlerFunc {
 
 		isUpdate, err := h.balanceRepository.AddWithdraw(user.ID, withdraw.Order, withdraw.Sum)
 		if err != nil {
+			h.errCh <- err
 			http.Error(rw, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
@@ -297,6 +311,7 @@ func (h Handler) GetWithdrawals() http.HandlerFunc {
 
 		withdrawals, err := h.balanceRepository.GetWithdrawals(user.ID)
 		if err != nil {
+			h.errCh <- err
 			http.Error(rw, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
@@ -309,6 +324,7 @@ func (h Handler) GetWithdrawals() http.HandlerFunc {
 
 		response, err := json.Marshal(withdrawals)
 		if err != nil {
+			h.errCh <- err
 			http.Error(rw, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}

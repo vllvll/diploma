@@ -2,7 +2,6 @@ package repositories
 
 import (
 	"database/sql"
-	"log"
 	"time"
 )
 
@@ -36,8 +35,6 @@ func (t *Token) CreateToken(token string, userID int) error {
 	)
 
 	if err != nil {
-		log.Printf("Error create token: %v", err)
-
 		return err
 	}
 

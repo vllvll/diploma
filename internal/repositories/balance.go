@@ -3,7 +3,6 @@ package repositories
 import (
 	"database/sql"
 	"github.com/vllvll/diploma/internal/types"
-	"log"
 	"time"
 )
 
@@ -33,8 +32,6 @@ func (b *Balance) CreateBalance(userID int) error {
 	)
 
 	if err != nil {
-		log.Printf("Error create balance: %v", err)
-
 		return err
 	}
 
@@ -44,8 +41,6 @@ func (b *Balance) CreateBalance(userID int) error {
 func (b *Balance) UpdateBalance(userID int, sum float32) error {
 	_, err := b.db.Exec("UPDATE balances SET sum = sum + $1 WHERE user_id = $2", sum, userID)
 	if err != nil {
-		log.Printf("Error update balance: %v", err)
-
 		return err
 	}
 
@@ -57,8 +52,6 @@ func (b *Balance) GetSumAndWithdrawals(userID int) (balance types.ResponseBalanc
 		Scan(&balance.Current, &balance.Withdrawn)
 
 	if err != nil {
-		log.Printf("Error get sum and withdrawals: %v", err)
-
 		return types.ResponseBalance{}, err
 	}
 
@@ -69,8 +62,6 @@ func (b *Balance) GetByUserID(userID int) (balance types.Balance, err error) {
 	err = b.db.QueryRow("SELECT id, user_id, sum, created_at, updated_at FROM balances WHERE user_id = $1 LIMIT 1", userID).
 		Scan(&balance.ID, &balance.UserID, &balance.Sum, &balance.CreatedAt, &balance.UpdatedAt)
 	if err != nil {
-		log.Printf("Error get balance by userID: %v", err)
-
 		return types.Balance{}, err
 	}
 
@@ -80,15 +71,13 @@ func (b *Balance) GetByUserID(userID int) (balance types.Balance, err error) {
 func (b *Balance) AddWithdraw(userID int, number string, sum float32) (bool, error) {
 	tx, err := b.db.Begin()
 	if err != nil {
-		log.Printf("Error with open transaction: %v\n", err)
-
 		return false, err
 	}
 
 	balance, err := b.GetByUserID(userID)
 	if err != nil {
 		if err = tx.Rollback(); err != nil {
-			log.Printf("Error with unable to rollback: %v", err)
+			return false, err
 		}
 
 		return false, err
@@ -98,7 +87,7 @@ func (b *Balance) AddWithdraw(userID int, number string, sum float32) (bool, err
 
 	if finalSum < 0 {
 		if err = tx.Rollback(); err != nil {
-			log.Printf("Error with unable to rollback: %v", err)
+			return false, err
 		}
 
 		return false, nil
@@ -107,10 +96,9 @@ func (b *Balance) AddWithdraw(userID int, number string, sum float32) (bool, err
 	_, err = tx.Exec("UPDATE balances SET sum = $1 WHERE user_id = $2", finalSum, userID)
 	if err != nil {
 		if err = tx.Rollback(); err != nil {
-			log.Printf("Error with unable to rollback: %v", err)
+			return false, err
 		}
 
-		log.Printf("Error with update balance: %v", err)
 		return false, err
 	}
 
@@ -123,16 +111,13 @@ func (b *Balance) AddWithdraw(userID int, number string, sum float32) (bool, err
 	)
 	if err != nil {
 		if err = tx.Rollback(); err != nil {
-			log.Printf("Error with unable to rollback: %v", err)
+			return false, err
 		}
 
-		log.Printf("Error create withdraw: %v", err)
 		return false, err
 	}
 
 	if err := tx.Commit(); err != nil {
-		log.Printf("Erro with unable to commit: %v", err)
-
 		return false, err
 	}
 
@@ -144,15 +129,11 @@ func (b *Balance) GetWithdrawals(userID int) ([]types.Withdraw, error) {
 
 	err := b.db.QueryRow("SELECT COUNT(*) as count FROM withdraw WHERE user_id = $1", userID).Scan(&count)
 	if err != nil {
-		log.Printf("Error get count withdrawals by user: %v", err)
-
 		return nil, err
 	}
 
 	rows, err := b.db.Query("SELECT id, user_id, number, sum, created_at FROM withdraw WHERE user_id = $1 ORDER BY created_at", userID)
 	if err != nil || rows.Err() != nil {
-		log.Printf("Error get withdrawals by user: %v", err)
-
 		return nil, err
 	}
 	defer rows.Close()
@@ -164,8 +145,6 @@ func (b *Balance) GetWithdrawals(userID int) ([]types.Withdraw, error) {
 
 		err = rows.Scan(&withdraw.ID, &withdraw.UserID, &withdraw.Number, &withdraw.Sum, &withdraw.CreatedAt)
 		if err != nil {
-			log.Printf("Error read order: %v", err)
-
 			return nil, err
 		}
 

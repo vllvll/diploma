@@ -37,12 +37,13 @@ func main() {
 	cryptService := services.NewCrypt(config.Key)
 	luhnService := services.NewLuhn()
 
+	errCh := make(chan error)
 	loyaltyCh := make(chan string)
-	loyaltyClient := integrations.NewLoyaltyClient(config, loyaltyCh, orderRepository, balanceRepository)
 
+	loyaltyClient := integrations.NewLoyaltyClient(config, loyaltyCh, errCh, orderRepository, balanceRepository)
 	go loyaltyClient.Processing()
 
-	handler := handlers.NewHandler(userRepository, tokenRepository, orderRepository, balanceRepository, cryptService, luhnService, loyaltyCh)
+	handler := handlers.NewHandler(userRepository, tokenRepository, orderRepository, balanceRepository, cryptService, luhnService, loyaltyCh, errCh)
 	router := routes.NewRouter(*handler, userRepository, tokenRepository)
 	router.RegisterHandlers()
 
@@ -60,17 +61,25 @@ func main() {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
 
-	for range c {
-		log.Println("Graceful shutdown")
+	for {
+		select {
+		case <-c:
+			log.Println("Graceful shutdown")
 
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 
-		if err := httpServer.Shutdown(ctx); err != nil {
-			log.Println(err)
+			if err := httpServer.Shutdown(ctx); err != nil {
+				log.Println(err)
+			}
+
+			cancel()
+
+			close(errCh)
+			close(loyaltyCh)
+
+			return
+		case <-errCh:
+			log.Printf("Error: %v\n", err)
 		}
-
-		cancel()
-
-		break
 	}
 }

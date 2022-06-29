@@ -3,7 +3,6 @@ package repositories
 import (
 	"database/sql"
 	"github.com/vllvll/diploma/internal/types"
-	"log"
 	"time"
 )
 
@@ -38,8 +37,6 @@ func (u *User) CreateUser(login string, password string) (id int, err error) {
 	).Scan(&id)
 
 	if err != nil {
-		log.Printf("Error create user: %v", err)
-
 		return 0, err
 	}
 

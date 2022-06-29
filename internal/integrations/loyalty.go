@@ -2,12 +2,12 @@ package integrations
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/go-resty/resty/v2"
 	"github.com/vllvll/diploma/internal/config"
 	"github.com/vllvll/diploma/internal/dictionaries"
 	"github.com/vllvll/diploma/internal/repositories"
 	"github.com/vllvll/diploma/internal/types"
-	"log"
 	"net/http"
 	"time"
 )
@@ -15,6 +15,7 @@ import (
 type LoyaltyClient struct {
 	Client            *resty.Client
 	orderCh           <-chan string
+	errCh             chan<- error
 	orderRepository   repositories.OrderInterface
 	balanceRepository repositories.BalanceInterface
 }
@@ -26,6 +27,7 @@ type LoyaltyClientInterface interface {
 func NewLoyaltyClient(
 	config *config.GophermartConfig,
 	ch <-chan string,
+	errCh chan<- error,
 	orderRepository repositories.OrderInterface,
 	balanceRepository repositories.BalanceInterface,
 ) LoyaltyClientInterface {
@@ -59,6 +61,7 @@ func NewLoyaltyClient(
 	return LoyaltyClient{
 		Client:            client,
 		orderCh:           ch,
+		errCh:             errCh,
 		orderRepository:   orderRepository,
 		balanceRepository: balanceRepository,
 	}
@@ -72,8 +75,6 @@ func (l LoyaltyClient) getOrder(number string) (orderLoyalty types.OrderLoyalty,
 	}
 
 	if err := json.Unmarshal(response.Body(), &orderLoyalty); err != nil {
-		log.Printf("Error get order processing: %v", err)
-
 		return orderLoyalty, err
 	}
 
@@ -83,7 +84,7 @@ func (l LoyaltyClient) getOrder(number string) (orderLoyalty types.OrderLoyalty,
 func (l LoyaltyClient) Processing() {
 	defer func() {
 		if err := recover(); err != nil {
-			log.Printf("Panic: %v", err)
+			l.errCh <- fmt.Errorf("panic: %v", err)
 
 			l.Processing()
 		}
@@ -92,21 +93,21 @@ func (l LoyaltyClient) Processing() {
 	for orderNumber := range l.orderCh {
 		orderLoyalty, err := l.getOrder(orderNumber)
 		if err != nil {
-			log.Printf("Error get order: %v", err)
+			l.errCh <- err
 
 			continue
 		}
 
 		userID, err := l.orderRepository.UpdateOrder(orderNumber, orderLoyalty.Status, orderLoyalty.Accrual)
 		if err != nil {
-			log.Printf("Error update order: %v", err)
+			l.errCh <- err
 
 			continue
 		}
 
 		err = l.balanceRepository.UpdateBalance(userID, orderLoyalty.Accrual)
 		if err != nil {
-			log.Printf("Error update balance: %v", err)
+			l.errCh <- err
 
 			continue
 		}
