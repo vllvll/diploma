@@ -67,7 +67,7 @@ func (o *Order) GetOrdersByUser(userID int) ([]types.Order, error) {
 	}
 
 	rows, err := o.db.Query("SELECT id, number, user_id, status, uploaded_at, accrual FROM orders WHERE user_id = $1 ORDER BY uploaded_at", userID)
-	if err != nil || rows.Err() != nil {
+	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
@@ -83,6 +83,11 @@ func (o *Order) GetOrdersByUser(userID int) ([]types.Order, error) {
 		}
 
 		orders = append(orders, order)
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return nil, err
 	}
 
 	return orders, nil

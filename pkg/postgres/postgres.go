@@ -5,15 +5,7 @@ import (
 	_ "github.com/jackc/pgx/v4/stdlib"
 )
 
-func ConnectDatabase(uri string) (*sql.DB, error) {
-	var db *sql.DB
-
-	db, err := sql.Open("pgx", uri)
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = db.Exec(`
+const migration = `
 		create table users
 		(
 			id            serial
@@ -112,7 +104,17 @@ func ConnectDatabase(uri string) (*sql.DB, error) {
 		
 		create unique index withdraw_id_uindex
 			on withdraw (id);
-	`)
+	`
+
+func ConnectDatabase(uri string) (*sql.DB, error) {
+	var db *sql.DB
+
+	db, err := sql.Open("pgx", uri)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = db.Exec(migration)
 
 	if err != nil {
 		return db, nil

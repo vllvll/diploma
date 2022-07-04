@@ -133,7 +133,7 @@ func (b *Balance) GetWithdrawals(userID int) ([]types.Withdraw, error) {
 	}
 
 	rows, err := b.db.Query("SELECT id, user_id, number, sum, created_at FROM withdraw WHERE user_id = $1 ORDER BY created_at", userID)
-	if err != nil || rows.Err() != nil {
+	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
@@ -149,6 +149,11 @@ func (b *Balance) GetWithdrawals(userID int) ([]types.Withdraw, error) {
 		}
 
 		withdrawals = append(withdrawals, withdraw)
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return nil, err
 	}
 
 	return withdrawals, nil
