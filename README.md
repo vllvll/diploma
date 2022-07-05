@@ -23,3 +23,9 @@ git fetch template && git checkout template/master .github
 ```
 
 Затем добавьте полученные изменения в свой репозиторий.
+
+# Материалы
+
+[Providing authentication details through context](https://gqlgen.com/recipes/authentication/)
+
+[How To Create A Simple Web Login Using Gin For Golang](https://betterprogramming.pub/how-to-create-a-simple-web-login-using-gin-for-golang-9ac46a5b0f89)
