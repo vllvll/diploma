@@ -37,8 +37,9 @@ func (ro *Router) RegisterHandlers() {
 		r.Post("/orders", ro.handlers.AddOrder())
 		r.Get("/orders", ro.handlers.GetOrders())
 
+		r.Get("/withdrawals", ro.handlers.GetWithdrawals())
+
 		r.Get("/balance", ro.handlers.GetBalance())
 		r.Post("/balance/withdraw", ro.handlers.AddWithdraw())
-		r.Get("/balance/withdrawals", ro.handlers.GetWithdrawals())
 	})
 }
